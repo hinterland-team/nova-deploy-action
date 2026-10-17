@@ -1,0 +1,6 @@
+# shell scripts run on the linux build machine, keep them LF
+*.sh text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary

@@ -1,0 +1,64 @@
+name: Nova Deploy
+description: Tests and builds the robot apps listed in nova-deploy.json, signs them with the shared key and publishes one GitHub release per app for Nova Deploy.
+
+inputs:
+  sha:
+    description: Full commit sha to build (empty = the commit that started the workflow)
+    required: false
+    default: ""
+  keystore:
+    description: Base64 of the shared signing keystore (secret NOVA_KEYSTORE_B64)
+    required: true
+  keystore-password:
+    description: Its store and key password (secret NOVA_KEYSTORE_PASSWORD)
+    required: true
+  app-properties:
+    description: Extra local.properties lines the apps need at build time (secret NOVA_APP_PROPERTIES)
+    required: false
+    default: ""
+  github-token:
+    description: Token that can read the calling repo and create releases in it
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    # a build signed with another key can never update the robot, so stop before anything else
+    - name: Check the signing key
+      shell: bash
+      env:
+        KEYSTORE: ${{ inputs.keystore }}
+        KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+      run: |
+        if [ -z "$KEYSTORE" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+          echo "::error::The signing key is missing. Set the repo secrets NOVA_KEYSTORE_B64 and NOVA_KEYSTORE_PASSWORD (Set it up on the Nova Deploy dashboard does it)."
+          exit 1
+        fi
+
+    # the calling repo goes into src/, so the workspace (and an action checked out there) stays as it is
+    - uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ inputs.sha || github.sha }}
+        token: ${{ inputs.github-token }}
+        path: src
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "21"
+
+    - uses: gradle/actions/setup-gradle@v4
+
+    - name: Test, build and release
+      shell: bash
+      working-directory: src
+      env:
+        NOVA_KEYSTORE_B64: ${{ inputs.keystore }}
+        NOVA_KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+        NOVA_APP_PROPERTIES: ${{ inputs.app-properties }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        BUILD_NUMBER: ${{ github.run_number }}
+      run: bash "$GITHUB_ACTION_PATH/release.sh"
