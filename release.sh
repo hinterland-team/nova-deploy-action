@@ -146,10 +146,13 @@ for a in "${apps[@]}"; do
   fi
   # the robot only takes an update signed with the same key as the installed app
   if [ -n "$want_cert" ] && [ -n "$apksigner" ]; then
-    got_cert="$("$apksigner" verify --print-certs "$apk" 2>/dev/null | tr -d '\r' |
-      sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 || true)"
-    [ "$got_cert" = "$want_cert" ] ||
-      fail "$apk is not signed with the shared key: the app's build has to sign the debug build with signing.* from local.properties"
+    signers="$("$apksigner" verify --print-certs "$apk" 2>&1 | tr -d '\r' || true)"
+    got_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$signers" | head -n 1)"
+    if [ "$got_cert" != "$want_cert" ]; then
+      # fingerprints are public, printing them makes a wrong key easy to spot
+      echo "apksigner said:"; head -n 8 <<<"$signers"
+      fail "$apk is not signed with the shared key (signed with ${got_cert:-nothing readable}, expected $want_cert): the app's build has to sign the debug build with signing.* from local.properties"
+    fi
   elif [ -n "$want_cert" ]; then
     echo "::warning::apksigner not found, the signing key of $apk not checked"
   fi
