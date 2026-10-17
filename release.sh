@@ -147,7 +147,8 @@ for a in "${apps[@]}"; do
   # the robot only takes an update signed with the same key as the installed app
   if [ -n "$want_cert" ] && [ -n "$apksigner" ]; then
     signers="$("$apksigner" verify --print-certs "$apk" 2>&1 | tr -d '\r' || true)"
-    got_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$signers" | head -n 1)"
+    # older apksigner: "Signer #1 certificate SHA-256 digest: ..", newer: "V2 Signer: certificate SHA-256 digest: .."
+    got_cert="$(sed -n -E 's/^(Signer #1|V[0-9]+ Signer:) certificate SHA-256 digest: //p' <<<"$signers" | head -n 1)"
     if [ "$got_cert" != "$want_cert" ]; then
       # fingerprints are public, printing them makes a wrong key easy to spot
       echo "apksigner said:"; head -n 8 <<<"$signers"
